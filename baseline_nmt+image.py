@@ -38,7 +38,7 @@ os.system('mkdir -p '+PREFIX)
 FOOTPRINT = 'U'+p.unit + '_H' + str(HIDDEN_SIZE) + '_L' + str(LAYERS)
 
 ### get data
-#X_tr,Y_tr,X_tr_img,X_val,Y_val,X_val_img = prepare_train()
+X_tr,Y_tr,X_tr_img,X_val,Y_val,X_val_img = prepare_train()
 
 IMG_SIZE = X_tr_img.shape[1]
 V = Y_tr.shape[2]
