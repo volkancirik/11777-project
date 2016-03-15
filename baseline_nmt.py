@@ -50,7 +50,7 @@ model.add(RNN(HIDDEN_SIZE, input_shape = (None,DIM)))
 model.add(RepeatVector(MAXLEN))
 for _ in xrange(LAYERS):
 	model.add(RNN(HIDDEN_SIZE, return_sequences=True))
-	model.add(TimeDistributedDense(SENT_HIDDEN_SIZE))
+	model.add(TimeDistributedDense(HIDDEN_SIZE))
 	model.add(Activation('relu'))
 
 model.add(TimeDistributedDense(V))
