@@ -23,7 +23,7 @@ def get_parser_nmt():
 
 	parser.add_argument('--use-hierarchical', action='store_true', dest='hierarchical',help='use hierarchical softmax, default : true')
 
-	parser.add_argument('--suffix', action='store', dest='suffix',help='full|truncated data, default = truncated',default = 'truncated')
+	parser.add_argument('--suffix', action='store', dest='suffix',help='full|task1|debug data, default = task1',default = 'task1')
 	parser.set_defaults(hierarchical = True)
 
 	return parser
@@ -32,7 +32,7 @@ def get_parser_nmt_test():
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument('--use-image', action='store_true', dest='image',help='use image context, default : false')
-	parser.add_argument('--suffix', action='store', dest='suffix',help='full|truncated data, default = truncated',default = 'truncated')
+	parser.add_argument('--suffix', action='store', dest='suffix',help='full|task1|debug data, default = truncated',default = 'task1')
 	parser.add_argument('--path', action='store', dest='path',help='<model_name> path where <model_name>.{meta|model|arch} exist',default = '')
 	parser.set_defaults(image = False)
 	return parser

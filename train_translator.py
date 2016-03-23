@@ -7,39 +7,50 @@ import numpy as np
 from get_model import get_model
 from prepare_data import prepare_train
 from utils import get_parser_nmt
+from buckets import distribute_buckets
 '''
 train a MMMT model
 '''
 ### get arguments
+
 parser = get_parser_nmt()
 p = parser.parse_args()
 
 ### Parameters
 MINI_BATCH = True
+HIERARCHICAL = p.hierarchical
 BATCH_SIZE = p.batch_size
 EPOCH = p.n_epochs
 MODEL = p.model
 PATIENCE = p.patience
 HIDDEN_SIZE = p.n_hidden
 LAYERS = p.layers
+DROPOUT = p.dropout
 BATCH_SIZE = p.batch_size
 PREFIX = 'exp/'+p.prefix + '/'
+SUFFIX = p.suffix
+REPEAT= {'full' : True, 'truncated' : False, 'debug' : False, 'task1' : False}[SUFFIX]
 os.system('mkdir -p '+PREFIX)
-FOOTPRINT = 'M' + str(MODEL) + '_U' + p.unit + '_H' + str(HIDDEN_SIZE) + '_L' + str(LAYERS)
+FOOTPRINT = 'M' + str(MODEL) + '_U' + p.unit + '_H' + str(HIDDEN_SIZE) + '_L' + str(LAYERS) + '_HIER' + str(HIERARCHICAL) + '_SUF' + SUFFIX + '_DR' + str(DROPOUT)
 
 ### get data
-X_tr, Y_tr, X_tr_img, X_val, Y_val, X_val_img, word_idx, idx_word = prepare_train(mini_batch = MINI_BATCH)
+X_tr, Y_tr, X_tr_img, X_val, Y_val, X_val_img, dicts, [length_tr, length_val] = prepare_train(use_hierarchical = HIERARCHICAL, suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug', 'task1' : '.task1'}[SUFFIX], repeat = REPEAT)
+
+V_en = len(dicts['word_idx_en'])
+V_de = len(dicts['word_idx_de'])
 
 IMG_SIZE = X_tr_img.shape[1]
-V = Y_tr.shape[2]
 N = len(X_tr)
-MAXLEN = Y_tr.shape[1]
-if MINI_BATCH:
-	DIM = X_tr.shape[2]
+if HIERARCHICAL:
+	Y_tr_1, Y_tr_2, Y_tr_3, Y_tr_4 = Y_tr
+	Y_val_1, Y_val_2, Y_val_3, Y_val_4 = Y_val
+	MAXLEN = Y_tr_1.shape[1]
 else:
-	DIM = X_tr[0].shape[2]
+	MAXLEN = Y_tr.shape[1]
 
-model = get_model(MODEL, p.unit, IMG_SIZE, DIM, MAXLEN, V, HIDDEN_SIZE)
+b_X_tr, b_Y_tr = distribute_buckets(length_tr, [X_tr,X_tr_img], Y_tr, step_size = 10, x_set = set([0]), y_set = set())
+
+model = get_model(MODEL, p.unit, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, use_hierarchical = HIERARCHICAL)
 pat = 0
 train_history = {'loss' : [], 'val_loss' : []}
 best_val_loss = float('inf')
@@ -47,37 +58,26 @@ best_val_loss = float('inf')
 print("saving stuff...")
 with open( PREFIX + FOOTPRINT + '.arch', 'w') as outfile:
 	json.dump(model.to_json(), outfile)
-pickle.dump({'word_idx' : word_idx,'idx_word' : idx_word, 'train_history' : train_history},open(PREFIX + FOOTPRINT + '.meta', 'w'))
+pickle.dump({'dicts' : dicts, 'train_history' : train_history, 'hierarchical' : HIERARCHICAL},open(PREFIX + FOOTPRINT + '.meta', 'w'))
 
-print("training model...")
+print("training model with {} parameters...".format(model.get_n_params()))
+NB = len(b_X_tr)
 for iteration in xrange(EPOCH):
 	print('_' * 50)
-	print('iteration {}/{}'.format(iteration+1,EPOCH))
 
-	if MINI_BATCH:
-		eh = model.fit({'input_en' : X_tr, 'input_img' : X_tr_img, 'output' : Y_tr}, batch_size = BATCH_SIZE, nb_epoch=1, verbose = True, validation_data = {'input_en' : X_val, 'input_img' : X_val_img, 'output' : Y_val})
+	train_history['loss'] += [0]
+	for j in xrange(NB):
+		[X_tr, X_tr_img] = b_X_tr[j]
+		[Y_tr_1, Y_tr_2, Y_tr_3, Y_tr_4] = b_Y_tr[j]
+		print('iteration {}/{} bucket {}/{}'.format(iteration+1,EPOCH, j+1,NB))
 
-		for key in ['loss','val_loss']:
-			train_history[key] += eh.history[key]
-	else:
-		e_loss = []
-		for i in xrange(N):
-			x = X_tr[i]
-			x_img = X_tr_img[i].reshape((1,IMG_SIZE))
-			y = Y_tr[i].reshape((1,MAXLEN,V))
-			eh = model.fit({'input_en' : x, 'input_img' : x_img, 'output' : y}, batch_size = 1, nb_epoch=1, verbose = False)
-			e_loss += eh.history['loss']
+		eh = model.fit({'input_en' : X_tr , 'input_img' : X_tr_img,  'output_1' : Y_tr_1, 'output_2' : Y_tr_2, 'output_3' : Y_tr_3, 'output_4' : Y_tr_4}, batch_size = BATCH_SIZE, nb_epoch = 1, verbose = True)
 
-		e_val_loss = []
-		for i in xrange(len(X_val)):
-			x = X_val[i]
-			x_img = X_tr_img[i].reshape((1,IMG_SIZE))
-			y = Y_val[i].reshape((1,MAXLEN,V))
-			v_loss = model.evaluate({'input_en' : x, 'input_img' : x_img, 'output' : y}, batch_size = 1, verbose = False)
-			e_val_loss += [v_loss]
+		for key in ['loss']:
+			train_history[key][-1] += eh.history[key][0]
 
-		train_history['loss'] += [np.mean(e_loss)]
-		train_history['val_loss'] += [np.mean(e_val_loss)]
+	vl = model.evaluate({'input_en' : X_val, 'input_img' : X_val_img, 'output_1' : Y_val_1, 'output_2' : Y_val_2, 'output_3' : Y_val_3, 'output_4' : Y_val_4}, batch_size = BATCH_SIZE, verbose = True)
+	train_history['val_loss'] += [vl]
 
 	print("TR  {} VAL {} best VL {} no improvement in {}".format(train_history['loss'][-1],train_history['val_loss'][-1],best_val_loss,pat))
 
@@ -90,4 +90,4 @@ for iteration in xrange(EPOCH):
 	if pat == PATIENCE:
 		break
 
-pickle.dump({'word_idx' : word_idx,'idx_word' : idx_word, 'train_history' : train_history},open(PREFIX + FOOTPRINT + '.meta', 'w'))
+pickle.dump({'dicts' : dicts, 'train_history' : train_history, 'hierarchical' : HIERARCHICAL},open(PREFIX + FOOTPRINT + '.meta', 'w'))
