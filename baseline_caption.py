@@ -39,7 +39,7 @@ os.system('mkdir -p '+PREFIX)
 FOOTPRINT = 'U' + p.unit + '_H' + str(HIDDEN_SIZE) + '_L' + str(LAYERS) + '_HIER' + str(HIERARCHICAL) + '_D' + str(DROPOUT) + '_SUF' + SUFFIX
 
 ### get data
-_, Y_tr, X_tr_img , _ , Y_val, X_val_img , dicts, _ = prepare_train(use_hierarchical = HIERARCHICAL, repeat = False, suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug'}[SUFFIX])
+_, Y_tr, X_tr_img , _ , Y_val, X_val_img , dicts, _ = prepare_train(use_hierarchical = HIERARCHICAL, repeat = False, suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug', 'task1' : '.task1'}[SUFFIX])
 
 V_de = len(dicts['word_idx_de'])
 
@@ -130,3 +130,4 @@ for iteration in xrange(EPOCH):
 		break
 
 pickle.dump({'dicts' : dicts, 'train_history' : train_history, 'hierarchical' : HIERARCHICAL},open(PREFIX + FOOTPRINT + '.meta', 'w'))
+print('DONE!')
