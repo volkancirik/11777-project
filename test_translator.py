@@ -173,6 +173,7 @@ if FUNC == "test" or FUNC == "eval":
 	decode_predicted(source, gold, predicted, dicts, SAMPLES = SAMPLES, HIERARCHICAL = True, func = FUNC)
 elif FUNC == "error":
 	delta_model = get_table(predicted, gold, dicts, SAMPLES = SAMPLES, HIERARCHICAL = True)
-	print(delta_model)
+	for delta in delta_model:
+		print(delta)
 else:
 	raise NotImplementedError()
