@@ -71,7 +71,7 @@ def get_table(predicted, gold, length, SAMPLES = 10, HIERARCHICAL = True):
 	return delta
 
 
-def decode_predicted(source, gold, predicted, dicts, SAMPLES = 10, HIERARCHICAL = True, random_samples = 0):
+def decode_predicted(source, gold, predicted, dicts, SAMPLES = 10, HIERARCHICAL = True, random_samples = 0, func = "eval"):
 
 	V_de = len(dicts['word_idx_de'])
 	dim = int(pow(V_de,0.25)) + 1
@@ -126,8 +126,12 @@ def decode_predicted(source, gold, predicted, dicts, SAMPLES = 10, HIERARCHICAL 
 		S += [samples]
 	for i in xrange(SAMPLES):
 		for j in xrange(random_samples+1):
-			print("{} ||| {} ||| {} ||| {}".format(source[i],gold[i],S[i][j]['sentence'],S[i][j]['prob']))
-		print(50*"_")
+			if func == "test":
+				print("{} ||| {} ||| {} ||| {}".format(source[i],gold[i],S[i][j]['sentence'],S[i][j]['prob']))
+			else:
+				print("{}".format(S[i][j]['sentence']))
+		if func == "test":
+			print(50*"_")
 
 def get_sentences(path_prefix = '../data/', test_source = 'val.en', test_target = 'val.de', suffix = '.task1'):
 	gold = []
@@ -164,8 +168,8 @@ elif M_TYPE == "image":
 else:
 	raise NotImplementedError()
 
-if FUNC == "test":
-	decode_predicted(source, gold, predicted, dicts, SAMPLES = SAMPLES, HIERARCHICAL = True)
+if FUNC == "test" or FUNC == "eval":
+	decode_predicted(source, gold, predicted, dicts, SAMPLES = SAMPLES, HIERARCHICAL = True, func = FUNC)
 elif FUNC == "error":
 	delta_model = get_table(predicted, gold, dicts, SAMPLES = SAMPLES, HIERARCHICAL = True)
 	print(delta_model)
