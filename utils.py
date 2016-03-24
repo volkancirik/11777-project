@@ -31,10 +31,12 @@ def get_parser_nmt():
 def get_parser_nmt_test():
 	parser = argparse.ArgumentParser()
 
-	parser.add_argument('--use-image', action='store_true', dest='image',help='use image context, default : false')
 	parser.add_argument('--suffix', action='store', dest='suffix',help='full|task1|debug data, default = truncated',default = 'task1')
 	parser.add_argument('--path', action='store', dest='path',help='<model_name> path where <model_name>.{meta|model|arch} exist',default = '')
-	parser.set_defaults(image = False)
+	parser.add_argument('--samples', action='store', dest='samples',help='# of samples 0 : for all, default 10', type = int, default = 10)
+	parser.add_argument('--mtype', action='store', dest='m_type',help='model type {text|text+image|image} ',default = '')
+	parser.add_argument('--func', action='store', dest='func',help='function type {test|error} ',default = 'test')
+
 	return parser
 
 def get_embeddings(word_idx, idx_word, wvec = '../embeddings/word2vec.pkl', UNK_vmap = '*UNKNOWN*', expand_vocab = False):
