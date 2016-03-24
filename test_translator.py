@@ -151,17 +151,18 @@ SUFFIX = p.suffix
 M_TYPE = p.m_type
 REPEAT= {'full' : True, 'truncated' : False, 'debug' : False, 'task1' : False}[SUFFIX] and (M_TYPE in set(["text+img","image"]))
 BATCH_SIZE = 64
-SAMPLES = len(X_test) if p.samples <= 0 else p.samples
 
 model, dicts, HIERARCHICAL = load_model(PATH)
 X_test, _ , X_test_img, _ = prepare_test(dicts['word_idx_en'],repeat = REPEAT, suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug', 'task1' : '.task1'}[SUFFIX])
 gold,source = get_sentences(suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug', 'task1' : '.task1'}[SUFFIX])
 
-X_test = X_test[:SAMPLES]
+SAMPLES = len(X_test_img) if p.samples <= 0 else p.samples
 X_test_img = X_test_img[:SAMPLES]
 if M_TYPE == 'text+image' or M_TYPE == 'image+text':
+	X_test = X_test[:SAMPLES]
 	predicted = model.predict({'input_en' : X_test, 'input_img' : X_test_img}, batch_size=BATCH_SIZE)
 elif M_TYPE == "text":
+	X_test = X_test[:SAMPLES]
 	predicted = model.predict({'input_en' : X_test}, batch_size=BATCH_SIZE)
 elif M_TYPE == "image":
 	predicted = model.predict({'input_img' : X_test_img}, batch_size=BATCH_SIZE)
