@@ -8,6 +8,42 @@ from keras.layers.attention import DenseAttention, TimeDistributedAttention
 UNIT = {'rnn' : recurrent.SimpleRNN, 'gru' : recurrent.GRU, 'lstm' : recurrent.LSTM}
 CLIP = 5
 
+def dan(RNN, IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT):
+	'''
+	DAN with fc of a CNN
+	'''
+	from keras.layers.averagelayer import Average
+	from keras.regularizers import l1l2
+	model = Graph()
+
+	model.add_input(name = 'input_img', input_shape = (IMG_SIZE,))
+	model.add_input(name = 'input_en', input_shape = (None,), dtype = 'int64')
+	model.add_node(Dense(HIDDEN_SIZE,activation = 'relu'), name = 'context_img', input = 'input_img') ###
+
+	model.add_node(Embedding(V_en,HIDDEN_SIZE,mask_zero=True),name = 'embedding', input = 'input_en')
+	model.add_node(Average(), name = 'avg_en0', input = 'embedding')
+
+	prev_layer = 'avg_en0'
+	for layer in xrange(LAYERS -1):
+		model.add_node(Dense(HIDDEN_SIZE, activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'avg_en'+str(layer+1), input = prev_layer)
+		model.add_node(Dropout(DROPOUT), name = 'avg_en'+str(layer+1)+'_d' , input = 'avg_en'+str(layer+1))
+		prev_layer = 'avg_en'+str(layer+1)+'_d'
+
+	model.add_node(RepeatVector(MAXLEN), name='rv_en', input = prev_layer)
+	model.add_node(RepeatVector(MAXLEN), name='rv_img', input='context_img')
+
+	model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name='decoder_rnn0', inputs = ['rv_en', 'rv_img'], merge_mode = 'concat',  concat_axis = -1)
+	model.add_node(Dropout(DROPOUT),name = 'decoder_rnn0_d', input = 'decoder_rnn0')
+
+	prev_layer = 'decoder_rnn0'
+	for layer in xrange(LAYERS -1):
+		model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name = 'decoder_rnn' + str(layer+1), input = prev_layer)
+		model.add_node(Dropout(DROPOUT),name = 'decoder_rnn'+str(layer+1)+'_d', input = 'decoder_rnn' + str(layer+1))
+		prev_layer = 'decoder_rnn'+str(layer+1)+'_d'
+
+	return model, prev_layer
+
+
 def model_0(RNN, IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT):
 	'''
 	Enc-dec with fc of a CNN
@@ -79,7 +115,6 @@ def model_2(RNN, IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT):
 	'''
 	Attention for english and conv feature maps
 	'''
-
 	model = Graph()
 	IMG_SIZE = 196
 	model.add_input(name = 'input_en', input_shape = (None,), dtype = 'int64')
@@ -108,13 +143,12 @@ def model_2(RNN, IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT):
 		model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name = 'decoder_rnn' + str(layer+1), input = prev_layer)
 		model.add_node(Dropout(DROPOUT),name = 'decoder_rnn'+str(layer+1)+'_d', input = 'decoder_rnn' + str(layer+1))
 		prev_layer = 'decoder_rnn'+str(layer+1)+'_d'
-
-	return model
+	return model, prev_layer
 
 def get_model(model_id, unit, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, use_hierarchical = False):
 	print('building model...')
 	RNN = UNIT[unit]
-	models = { 2 : model_2, 1 : model_1, 0 : model_0}
+	models = { 2 : model_2, 1 : model_1, 0 : model_0, -1 : dan}
 	model,prev_layer =  models[model_id](RNN,IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT)
 
 	if use_hierarchical:

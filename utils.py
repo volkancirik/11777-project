@@ -21,9 +21,12 @@ def get_parser_nmt():
 
 	parser.add_argument('--prefix', action='store', dest='prefix',help='exp log prefix to append exp/{} default = 0',default = '0')
 
+	parser.add_argument('--source', action='store', dest='source',help='source file for validation default = ../data/val.de.task1',default = '../data/val.de.')
+
 	parser.add_argument('--use-hierarchical', action='store_true', dest='hierarchical',help='use hierarchical softmax, default : true')
 
 	parser.add_argument('--suffix', action='store', dest='suffix',help='full|task1|debug data, default = task1',default = 'task1')
+
 	parser.set_defaults(hierarchical = True)
 
 	return parser
@@ -31,7 +34,7 @@ def get_parser_nmt():
 def get_parser_nmt_test():
 	parser = argparse.ArgumentParser()
 
-	parser.add_argument('--suffix', action='store', dest='suffix',help='full|task1|debug data, default = truncated',default = 'task1')
+	parser.add_argument('--suffix', action='store', dest='suffix',help='full|task1|debug data, default = task1',default = 'task1')
 	parser.add_argument('--path', action='store', dest='path',help='<model_name> path where <model_name>.{meta|model|arch} exist',default = '')
 	parser.add_argument('--samples', action='store', dest='samples',help='# of samples 0 : for all, default 0', type = int, default = 0)
 	parser.add_argument('--mtype', action='store', dest='m_type',help='model type {text|text+image|image} ',default = '')
@@ -74,3 +77,43 @@ def get_embeddings(word_idx, idx_word, wvec = '../embeddings/word2vec.pkl', UNK_
 			print >> sys.stderr, "something is wrong with following tuple:", idx, idx_word[idx], w
 			quit(1)
 	return embedding_weights, word_idx, idx_word
+
+
+def decode_predicted(fname, predicted, dicts, HIERARCHICAL = True):
+	import numpy as np
+	import sys
+
+	f = open(fname, 'w')
+	V_de = len(dicts['word_idx_de'])
+	dim = int(pow(V_de,0.25)) + 1
+	vocab = range(V_de)
+	S = []
+	EOS = dicts['word_idx_de']['</s>']
+	print >> sys.stderr, "decoding prediction..."
+#	print >> sys.stderr, "debug-->", predicted['output_1'].shape
+	for i in xrange(predicted['output_1'].shape[0]):
+		if HIERARCHICAL:
+			probabilities = []
+			for j in xrange(predicted['output_1'].shape[1]):
+				prob_token = np.zeros((V_de,1))
+
+				tmp1 = np.outer(predicted['output_1'][i,j],predicted['output_2'][i,j]).flatten()
+				tmp2 = np.outer(predicted['output_3'][i,j],predicted['output_4'][i,j]).flatten()
+				outer1 = np.outer(tmp1,tmp2).flatten()
+				prob_token = outer1[:V_de].reshape((1,V_de))
+				probabilities += [ prob_token/ np.sum(prob_token)]
+		else:
+			probabilities = predicted['output'][i]
+
+		greedy = [ np.argmax(p) for p in probabilities]
+		greedy_probs = [ np.max(p) for p in probabilities]
+		try:
+			greedy_clipped = greedy[:greedy.index(EOS)]
+		except:
+			greedy_clipped = greedy
+			pass
+#		print >> sys.stderr, "-->", greedy
+		seq = [ dicts['idx_word_de'][idx] for idx in greedy_clipped]
+		print >> f, " ".join(seq)
+	f.close()
+	print >> sys.stderr, "decoding done."

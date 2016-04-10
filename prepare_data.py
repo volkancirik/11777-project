@@ -4,6 +4,7 @@ import numpy as np
 import cPickle as pickle
 from keras.preprocessing.sequence import pad_sequences
 from collections import defaultdict
+
 """
 prepare data for training / testing
 """
@@ -17,11 +18,12 @@ def open_file(fname):
 		quit(0)
 	return f
 
-def process_target(fname, word_idx, tokenize = False, max_len = -1, use_hierarchical = True):
+def process_target(fname, word_idx, tokenize = False, max_len = -1, use_hierarchical = True): ### shifted should be here!
 
 	in_file = open_file(fname)
 	V = len(word_idx)
 	dim = int(pow(V,0.25)) + 1
+	V = dim ** 4
 
 	S = [line.strip().split() + [EOS] for line in in_file]
 	N = len(S)
@@ -34,6 +36,7 @@ def process_target(fname, word_idx, tokenize = False, max_len = -1, use_hierarch
 		Y_4 = np.zeros((N,max_len, dim), dtype=np.bool)
 	else:
 		Y = np.zeros((N,max_len,V), dtype=np.bool)
+	Yshifted = np.zeros((N,max_len,V), dtype=np.bool)
 	for i,s in enumerate(S):
 		for j,tok in enumerate(s):
 			idx = word_idx[tok]
@@ -51,9 +54,12 @@ def process_target(fname, word_idx, tokenize = False, max_len = -1, use_hierarch
 
 			else:
 				Y[i, j, idx ] = 1
+			if j+1 < len(s): ###
+				Yshifted[i, j+1, idx ] = 1
+
 	if use_hierarchical:
-		return Y_1,Y_2,Y_3,Y_4
-	return Y
+		Y = Y_1,Y_2,Y_3,Y_4
+	return [Y, Yshifted]
 
 def process_source(fname, word_idx_en, max_len = -1):
 
@@ -111,7 +117,15 @@ def get_dicts(f_list):
 
 	return word_idx, idx_word
 
-def prepare_train(path_prefix = '../data/', train_source = 'train.en', train_target = 'train.de', val_source = 'val.en', val_target = 'val.de', TRESHOLD = 1, train_img = 'TRAIN.vgg19.fc7.pkl', val_img = 'VAL.vgg19.fc7.pkl', use_hierarchical = True, repeat = False, suffix = '.all.tokenized.unkified'):
+def prepare_train(path_prefix = '../data/', train_source = 'train.en', train_target = 'train.de', val_source = 'val.en', val_target = 'val.de', TRESHOLD = 1, train_img = 'TRAIN.vgg19.fc7.pkl', val_img = 'VAL.vgg19.fc7.pkl', use_hierarchical = True, repeat = False, suffix = '.all.tokenized.unkified', model_type = 0):
+	if model_type == 2:
+		train_img = 'TRAIN.vgg19.conv5_4.pkl'
+		val_img = 'VAL.vgg19.conv5_4.pkl'
+
+	if suffix == '.debug':
+		train_target = val_target
+		train_source = val_source
+		train_img = val_img
 
 	tr_t = open_file(path_prefix + train_target + suffix)
 	val_t = open_file(path_prefix + val_target + suffix)
@@ -128,29 +142,35 @@ def prepare_train(path_prefix = '../data/', train_source = 'train.en', train_tar
 	print >> sys.stderr, "vocabulary size for english %d and for german is %d \n max seq len for english %d and for german is %d" % (len(idx_word_en),len(idx_word_de),max_len_en, max_len_de)
 
 	X_tr, length_tr = process_source(path_prefix + train_source  + suffix, word_idx_en, max_len = max_len_en)
-	Y_tr = process_target(path_prefix + train_target + suffix, word_idx_de, max_len = max_len_de, use_hierarchical = use_hierarchical)
+	[Y_tr, Y_tr_shifted] = process_target(path_prefix + train_target + suffix, word_idx_de, max_len = max_len_de, use_hierarchical = use_hierarchical)
 	X_tr_img = process_image(path_prefix + train_img, repeat = repeat)
 
 	X_val, length_val = process_source(path_prefix + val_source + suffix, word_idx_en,  max_len = max_len_en)
-	Y_val = process_target(path_prefix + val_target + suffix, word_idx_de, max_len = max_len_de, use_hierarchical = use_hierarchical)
+	[Y_val,Y_val_shifted] = process_target(path_prefix + val_target + suffix, word_idx_de, max_len = max_len_de, use_hierarchical = use_hierarchical)
 	X_val_img = process_image(path_prefix + val_img, repeat = repeat)
 
 	dicts = {'word_idx_en' :  word_idx_en, 'idx_word_en' : idx_word_en, 'word_idx_de' :  word_idx_de, 'idx_word_de' : idx_word_de}
 
 	if suffix == '.debug':
 		X_tr_img = X_tr_img[:X_tr.shape[0]]
-		X_val_img = X_val_img[:X_val.shape[0]]
+		X_val_img = X_tr_img
 
-	return X_tr, Y_tr, X_tr_img, X_val, Y_val, X_val_img, dicts , [length_tr, length_val]
+	return X_tr, [Y_tr, Y_tr_shifted] , X_tr_img, X_val, [Y_val,Y_val_shifted], X_val_img, dicts , [length_tr, length_val]
 
-def prepare_test(word_idx_en, path_prefix = '../data/', test_source = 'val.en', test_target = 'val.de', test_img = 'VAL.vgg19.fc7.pkl', repeat = False, suffix = '.all.tokenized.unkified'):
+def prepare_test(word_idx_en, word_idx_de, path_prefix = '../data/', test_source = 'val.en', test_target = 'val.de', test_img = 'VAL.vgg19.fc7.pkl', repeat = False, suffix = '.all.tokenized.unkified'):
+
+	if suffix == '.debug':
+		test_source = 'train.en'
+		test_target = 'train.de'
 
 	test_s = open_file(path_prefix + test_source + suffix)
 	test_t = open_file(path_prefix + test_target + suffix)
 
 	max_len_en = get_max_len([test_s])
+	max_len_de = get_max_len([test_t])
 
 	X_test, length_test = process_source(path_prefix + test_source + suffix, word_idx_en, max_len = max_len_en)
 	X_test_img = process_image(path_prefix + test_img, repeat = repeat)
+	[Y_test, Y_test_shifted] = process_target(path_prefix + test_target + suffix, word_idx_de, max_len = max_len_de, use_hierarchical = True)
 
-	return X_test, test_t, X_test_img , length_test
+	return X_test, test_t, X_test_img ,[Y_test, Y_test_shifted]
