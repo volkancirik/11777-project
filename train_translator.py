@@ -37,19 +37,18 @@ FOOTPRINT = 'M' + str(MODEL) + '_U' + p.unit + '_H' + str(HIDDEN_SIZE) + '_L' + 
 ### get data
 X_tr, [Y_tr, Y_tr_shifted] , X_tr_img, X_val, [Y_val,Y_val_shifted], X_val_img, dicts , [length_tr, length_val] = prepare_train(use_hierarchical = HIERARCHICAL, suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug', 'task1' : '.task1'}[SUFFIX], repeat = REPEAT, model_type = MODEL)
 
+MAXLEN = Y_tr_shifted.shape[1]
 V_en = len(dicts['word_idx_en'])
-V_de = len(dicts['word_idx_de'])
-
 IMG_SIZE = X_tr_img.shape[1]
-N = len(X_tr)
-if HIERARCHICAL:
-	Y_tr_1, Y_tr_2, Y_tr_3, Y_tr_4 = Y_tr
-	Y_val_1, Y_val_2, Y_val_3, Y_val_4 = Y_val
-	MAXLEN = Y_tr_1.shape[1]
-else:
-	MAXLEN = Y_tr.shape[1]
 
-b_X_tr, b_Y_tr = distribute_buckets(length_tr, [X_tr,X_tr_img], Y_tr, step_size = 10, x_set = set([0]), y_set = set())
+N = len(X_tr)
+Y_tr_1, Y_tr_2, Y_tr_3, Y_tr_4 = Y_tr
+Y_val_1, Y_val_2, Y_val_3, Y_val_4 = Y_val
+V_de = Y_tr_1.shape[-1] ** 4
+
+print("maxlen & img_size & v_en & v_de",MAXLEN,IMG_SIZE,V_en,V_de)
+
+b_X_tr, b_Y_tr = distribute_buckets(length_tr, [X_tr,X_tr_img], list(Y_tr) +[Y_tr_shifted], step_size = 5, x_set = set([0]), y_set = set())
 
 model = get_model(MODEL, p.unit, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, use_hierarchical = HIERARCHICAL)
 pat = 0
@@ -70,15 +69,15 @@ for iteration in xrange(EPOCH):
 	train_history['loss'] += [0]
 	for j in xrange(NB):
 		[X_tr, X_tr_img] = b_X_tr[j]
-		[Y_tr_1, Y_tr_2, Y_tr_3, Y_tr_4] = b_Y_tr[j]
+		[Y_tr_1, Y_tr_2, Y_tr_3, Y_tr_4, Y_tr_shifted] = b_Y_tr[j]
 		print('iteration {}/{} bucket {}/{}'.format(iteration+1,EPOCH, j+1,NB))
 
-		eh = model.fit({'input_en' : X_tr , 'input_img' : X_tr_img,  'output_1' : Y_tr_1, 'output_2' : Y_tr_2, 'output_3' : Y_tr_3, 'output_4' : Y_tr_4}, batch_size = BATCH_SIZE, nb_epoch = 1, verbose = True)
+		eh = model.fit({'input_en' : X_tr , 'input_img' : X_tr_img, 'input_de' : Y_tr_shifted ,  'output_1' : Y_tr_1, 'output_2' : Y_tr_2, 'output_3' : Y_tr_3, 'output_4' : Y_tr_4}, batch_size = BATCH_SIZE, nb_epoch = 1, verbose = True)
 
 		for key in ['loss']:
 			train_history[key][-1] += eh.history[key][0]
 
-	predicted = model.predict({'input_en' : X_val, 'input_img' : X_val_img}, batch_size = BATCH_SIZE)
+	predicted = model.predict({'input_en' : X_val, 'input_img' : X_val_img, 'input_de' : Y_val_shifted}, batch_size = BATCH_SIZE)
 	decode_predicted(PREFIX + FOOTPRINT + '.predicted', predicted, dicts)
 	cmd = 'java -Xmx2G -jar ../bin/meteor-1.5/meteor-1.5.jar %s %s -l de > %s' % (PREFIX + FOOTPRINT + '.predicted', SOURCE,PREFIX + FOOTPRINT + '.meteor')
 	os.system(cmd)
@@ -97,5 +96,5 @@ for iteration in xrange(EPOCH):
 		model.save_weights(PREFIX + FOOTPRINT + '.model',overwrite = True)
 	if pat == PATIENCE:
 		break
-
+print("DONE.".format(model.get_n_params()))
 pickle.dump({'dicts' : dicts, 'train_history' : train_history, 'hierarchical' : HIERARCHICAL},open(PREFIX + FOOTPRINT + '.meta', 'w'))

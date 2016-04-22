@@ -5,21 +5,29 @@ from keras.layers.embeddings import Embedding
 from keras.optimizers import RMSprop
 
 from keras.layers.attention import DenseAttention, TimeDistributedAttention
-UNIT = {'rnn' : recurrent.SimpleRNN, 'gru' : recurrent.GRU, 'lstm' : recurrent.LSTM}
-CLIP = 5
+from keras.layers.decoder import LSTMhdecoder, SplitDecoder, LSTMAttentionDecoder, SequenceLayerMerge
+from keras.regularizers import l1l2, l2
 
-def dan(RNN, IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT):
+from keras.layers import dropoutrnn
+
+#UNIT = {'rnn' : recurrent.SimpleRNN, 'gru' : recurrent.GRU, 'lstm' : recurrent.LSTM}
+UNIT = { 'gru' : dropoutrnn.DropoutGRU, 'lstm' : dropoutrnn.DropoutLSTM}
+CLIP = 10
+
+def dan(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT):
 	'''
 	DAN with fc of a CNN
 	'''
 	from keras.layers.averagelayer import Average
-	from keras.regularizers import l1l2
+
 	model = Graph()
 
 	model.add_input(name = 'input_img', input_shape = (IMG_SIZE,))
 	model.add_input(name = 'input_en', input_shape = (None,), dtype = 'int64')
-	model.add_node(Dense(HIDDEN_SIZE,activation = 'relu'), name = 'context_img', input = 'input_img') ###
+	model.add_input(name = 'input_de', input_shape = (None,), dtype = 'int64')
 
+	model.add_node(Layer(),name = 'shifted_de', input = 'input_de')
+	model.add_node(Dense(HIDDEN_SIZE,activation = 'relu'), name = 'context_img', input = 'input_img')
 	model.add_node(Embedding(V_en,HIDDEN_SIZE,mask_zero=True),name = 'embedding', input = 'input_en')
 	model.add_node(Average(), name = 'avg_en0', input = 'embedding')
 
@@ -29,22 +37,13 @@ def dan(RNN, IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT):
 		model.add_node(Dropout(DROPOUT), name = 'avg_en'+str(layer+1)+'_d' , input = 'avg_en'+str(layer+1))
 		prev_layer = 'avg_en'+str(layer+1)+'_d'
 
-	model.add_node(RepeatVector(MAXLEN), name='rv_en', input = prev_layer)
-	model.add_node(RepeatVector(MAXLEN), name='rv_img', input='context_img')
+	model.add_node(Dense(HIDDEN_SIZE,activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'merged', inputs = [prev_layer, 'context_img'], merge_mode = 'concat',  concat_axis = -1)
+	model.add_node(Dropout(DROPOUT), name = 'merged_d' , input = 'merged')
 
-	model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name='decoder_rnn0', inputs = ['rv_en', 'rv_img'], merge_mode = 'concat',  concat_axis = -1)
-	model.add_node(Dropout(DROPOUT),name = 'decoder_rnn0_d', input = 'decoder_rnn0')
-
-	prev_layer = 'decoder_rnn0'
-	for layer in xrange(LAYERS -1):
-		model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name = 'decoder_rnn' + str(layer+1), input = prev_layer)
-		model.add_node(Dropout(DROPOUT),name = 'decoder_rnn'+str(layer+1)+'_d', input = 'decoder_rnn' + str(layer+1))
-		prev_layer = 'decoder_rnn'+str(layer+1)+'_d'
-
-	return model, prev_layer
+	return model, 'merged_d'
 
 
-def model_0(RNN, IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT):
+def model_0(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT):
 	'''
 	Enc-dec with fc of a CNN
 	'''
@@ -52,34 +51,27 @@ def model_0(RNN, IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT):
 
 	model.add_input(name = 'input_img', input_shape = (IMG_SIZE,))
 	model.add_input(name = 'input_en', input_shape = (None,), dtype = 'int64')
-	model.add_node(Dense(HIDDEN_SIZE,activation = 'relu'), name = 'context_img', input = 'input_img') ###
+	model.add_input(name = 'input_de', input_shape = (None,), dtype = 'int64')
 
+	model.add_node(Layer(),name = 'shifted_de', input = 'input_de')
+	model.add_node(Dense(HIDDEN_SIZE,activation = 'relu'), name = 'context_img', input = 'input_img')
 	model.add_node(Embedding(V_en,HIDDEN_SIZE,mask_zero=True),name = 'embedding', input = 'input_en')
 
 	prev_layer = 'embedding'
 	for layer in xrange(LAYERS -1):
-		model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name = 'rnn'+str(layer), input = prev_layer)
-		model.add_node(Dropout(DROPOUT),name = 'rnn'+str(layer)+'_d', input = 'rnn'+str(layer))
-		prev_layer = 'rnn'+str(layer)+'_d'
+		model.add_node(RNN(HIDDEN_SIZE, output_dim = HIDDEN_SIZE, return_sequences = True), name = 'rnn'+str(layer), input = prev_layer)
+		prev_layer = 'rnn'+str(layer)
 
-	model.add_node(RNN(HIDDEN_SIZE, return_sequences = False), name='rnn'+str(LAYERS), input = prev_layer)
-	model.add_node(RepeatVector(MAXLEN), name='rv_en', input='rnn'+str(LAYERS))
-#	model.add_node(RepeatVector(MAXLEN), name='rv_img', input='input_img')
-	model.add_node(RepeatVector(MAXLEN), name='rv_img', input='context_img')
+	model.add_node(RNN(HIDDEN_SIZE, output_dim = HIDDEN_SIZE, return_sequences = False), name='rnn'+str(LAYERS), input = prev_layer)
 
-	model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name='decoder_rnn0', inputs = ['rv_en', 'rv_img'], merge_mode = 'concat',  concat_axis = -1)
-	model.add_node(Dropout(DROPOUT),name = 'decoder_rnn0_d', input = 'decoder_rnn0')
-
-	prev_layer = 'decoder_rnn0'
-	for layer in xrange(LAYERS -1):
-		model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name = 'decoder_rnn' + str(layer+1), input = prev_layer)
-		model.add_node(Dropout(DROPOUT),name = 'decoder_rnn'+str(layer+1)+'_d', input = 'decoder_rnn' + str(layer+1))
-		prev_layer = 'decoder_rnn'+str(layer+1)+'_d'
+	model.add_node(Dense(HIDDEN_SIZE, activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'merged', inputs = ['rnn'+str(LAYERS), 'context_img'], merge_mode = 'concat')
+	model.add_node(Dropout(DROPOUT), name = 'merged_d' , input = 'merged')
+	prev_layer = 'merged_d'
 
 	return model, prev_layer
 
 
-def model_1(RNN, IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT):
+def model_1(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT):
 	'''
 	Attention for english and using fc of a CNN
 	'''
@@ -87,93 +79,43 @@ def model_1(RNN, IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT):
 
 	model.add_input(name = 'input_img', input_shape = (IMG_SIZE,))
 	model.add_input(name = 'input_en', input_shape = (None,), dtype = 'int64')
-	model.add_node(Dense(HIDDEN_SIZE,activation = 'relu'), name = 'context_img', input = 'input_img') ###
+	model.add_input(name = 'input_de', input_shape = (None,), dtype = 'int64')
+
+	model.add_node(Layer(),name = 'shifted_de', input = 'input_de')
+
+	model.add_node(Dense(HIDDEN_SIZE,activation = 'relu'), name = 'context_img', input = 'input_img')
 	model.add_node(Embedding(V_en,HIDDEN_SIZE,mask_zero=True),name = 'embedding', input = 'input_en')
 
 	prev_layer = 'embedding'
-	for layer in xrange(LAYERS -1):
-		model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name = 'rnn'+str(layer), input = prev_layer)
-		model.add_node(Dropout(DROPOUT),name = 'rnn'+str(layer)+'_d', input = 'rnn'+str(layer))
-		prev_layer = 'rnn'+str(layer)+'_d'
+	for layer in xrange(LAYERS-1):
+		model.add_node(RNN(HIDDEN_SIZE, output_dim = HIDDEN_SIZE, return_sequences = True), name = 'rnn'+str(layer), input = prev_layer)
+		prev_layer = 'rnn'+str(layer)
 
-	model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name='encoder_context', input = prev_layer)
-#	model.add_node(RepeatVector(MAXLEN), name='recurrent_context', input='input_img')
-	model.add_node(RepeatVector(MAXLEN), name='recurrent_context', input='context_img')
-
-	model.add_node(TimeDistributedAttention(prev_dim = HIDDEN_SIZE, att_dim = HIDDEN_SIZE, return_sequences = True, prev_context = True), name='attention', inputs=['encoder_context','recurrent_context'], merge_mode = 'join_att') ##
-	model.add_node(Dropout(DROPOUT),name = 'attention_d', input = 'attention')
-
-	prev_layer = 'attention_d'
-	for layer in xrange(LAYERS -1):
-		model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name = 'decoder_rnn' + str(layer+1), input = prev_layer)
-		model.add_node(Dropout(DROPOUT),name = 'decoder_rnn'+str(layer+1)+'_d', input = 'decoder_rnn' + str(layer+1))
-		prev_layer = 'decoder_rnn'+str(layer+1)+'_d'
-
-	return model,prev_layer
-
-def model_2(RNN, IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT):
-	'''
-	Attention for english and conv feature maps
-	'''
-	model = Graph()
-	IMG_SIZE = 196
-	model.add_input(name = 'input_en', input_shape = (None,), dtype = 'int64')
-	model.add_input(name = 'input_img', input_shape = (None,IMG_SIZE))
-	model.add_node(Layer(),name = 'img', input = 'input_img')
-	model.add_node(Embedding(V_en,HIDDEN_SIZE,mask_zero=True),name = 'embedding', input = 'input_en')
-
-	prev_layer = 'embedding'
-	for layer in xrange(LAYERS -1):
-		model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name = 'rnn'+str(layer), input = prev_layer)
-		model.add_node(Dropout(DROPOUT),name = 'rnn'+str(layer)+'_d', input = 'rnn'+str(layer))
-		prev_layer = 'rnn'+str(layer)+'_d'
-
-	model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name='encoder_context', input = prev_layer)
-	model.add_node(RNN(HIDDEN_SIZE), name='rnn', input = prev_layer)
-	model.add_node(RepeatVector(MAXLEN), name='recurrent_context', input='rnn')
-
-	model.add_node(TimeDistributedAttention(prev_dim = HIDDEN_SIZE, att_dim = HIDDEN_SIZE, return_sequences = True, prev_context = True), name='attention_en', inputs=['encoder_context','recurrent_context'], merge_mode = 'join_att')
-	model.add_node(TimeDistributedAttention(prev_dim = HIDDEN_SIZE, att_dim = HIDDEN_SIZE, return_sequences = True, prev_context = True, enc_name = 'img'), name='attention_img', inputs=['img','recurrent_context'], merge_mode = 'join_att')
-
-	model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name = 'attention', inputs = ['attention_en', 'attention_img'], merge_mode = 'concat',  concat_axis = -1)
-	model.add_node(Dropout(DROPOUT),name = 'attention_d', input = 'attention')
-
-	prev_layer = 'attention_d'
-	for layer in xrange(LAYERS -1):
-		model.add_node(RNN(HIDDEN_SIZE, return_sequences = True), name = 'decoder_rnn' + str(layer+1), input = prev_layer)
-		model.add_node(Dropout(DROPOUT),name = 'decoder_rnn'+str(layer+1)+'_d', input = 'decoder_rnn' + str(layer+1))
-		prev_layer = 'decoder_rnn'+str(layer+1)+'_d'
 	return model, prev_layer
 
 def get_model(model_id, unit, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, use_hierarchical = False):
 	print('building model...')
 	RNN = UNIT[unit]
-	models = { 2 : model_2, 1 : model_1, 0 : model_0, -1 : dan}
-	model,prev_layer =  models[model_id](RNN,IMG_SIZE, MAXLEN, V_en, HIDDEN_SIZE, LAYERS, DROPOUT)
+	models = { 1 : model_1, 0 : model_0, -1 : dan}
+	model,prev_layer =  models[model_id](RNN,IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT)
+	DIM = int(pow(V_de,0.25))
 
-	if use_hierarchical:
-		DIM = int(pow(V_de,0.25)) + 1
-		model.add_node(TimeDistributedDense(DIM), name='tdd_1', input= prev_layer)
-		model.add_node(TimeDistributedDense(DIM), name='tdd_2', input= prev_layer)
-		model.add_node(TimeDistributedDense(DIM), name='tdd_3', input= prev_layer)
-		model.add_node(TimeDistributedDense(DIM), name='tdd_4', input= prev_layer)
+	if model_id == 1:
 
-		model.add_node(Activation('softmax'), name = 'softmax_1',input = 'tdd_1')
-		model.add_node(Activation('softmax'), name = 'softmax_2',input = 'tdd_2')
-		model.add_node(Activation('softmax'), name = 'softmax_3',input = 'tdd_3')
-		model.add_node(Activation('softmax'), name = 'softmax_4',input = 'tdd_4')
+		model.add_node(LSTMAttentionDecoder(DIM,HIDDEN_SIZE,V_de,HIDDEN_SIZE, enc_name = prev_layer, dec_input_name = 'shifted_de', img_name = 'context_img'), name = 'dec', inputs = [prev_layer, 'shifted_de', 'context_img'], merge_mode = 'join_att_dec')
 
-		model.add_output(name='output_1', input='softmax_1')
-		model.add_output(name='output_2', input='softmax_2')
-		model.add_output(name='output_3', input='softmax_3')
-		model.add_output(name='output_4', input='softmax_4')
-
-		optimizer = RMSprop(clipnorm = CLIP)
-		model.compile(optimizer = optimizer, loss = {'output_1': 'categorical_crossentropy','output_2': 'categorical_crossentropy','output_3': 'categorical_crossentropy','output_4': 'categorical_crossentropy'})
 	else:
-		model.add_node(TimeDistributedDense(V_de), name='tdd', input= prev_layer)
-		model.add_node(Activation('softmax'), name = 'softmax',input = 'tdd')
-		model.add_output(name='output', input='softmax')
-		optimizer = RMSprop(clipnorm = CLIP)
-		model.compile(optimizer = optimizer, loss = {'output': 'categorical_crossentropy'})
+		model.add_node(LSTMhdecoder(DIM,HIDDEN_SIZE,V_de,HIDDEN_SIZE, enc_name = prev_layer, dec_input_name = 'shifted_de'), name = 'dec', inputs = [prev_layer,'shifted_de'], merge_mode = 'join_dec')
+	model.add_node(SplitDecoder(0), name = 'dec1', input = 'dec')
+	model.add_node(SplitDecoder(1), name = 'dec2', input = 'dec')
+	model.add_node(SplitDecoder(2), name = 'dec3', input = 'dec')
+	model.add_node(SplitDecoder(3), name = 'dec4', input = 'dec')
+
+	model.add_output(name = 'output_1', input = 'dec1')
+	model.add_output(name = 'output_2', input = 'dec2')
+	model.add_output(name = 'output_3', input = 'dec3')
+	model.add_output(name = 'output_4', input = 'dec4')
+	optimizer = RMSprop(clipnorm = CLIP)
+	model.compile(loss = { 'output_1' : 'categorical_crossentropy', 'output_2' : 'categorical_crossentropy', 'output_3' : 'categorical_crossentropy', 'output_4' : 'categorical_crossentropy'}, optimizer= optimizer)
+
 	return model

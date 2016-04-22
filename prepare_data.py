@@ -36,7 +36,9 @@ def process_target(fname, word_idx, tokenize = False, max_len = -1, use_hierarch
 		Y_4 = np.zeros((N,max_len, dim), dtype=np.bool)
 	else:
 		Y = np.zeros((N,max_len,V), dtype=np.bool)
-	Yshifted = np.zeros((N,max_len,V), dtype=np.bool)
+
+#	Yshifted = np.zeros((N,max_len,V), dtype=np.bool)
+	Yshifted = np.zeros((N,max_len), dtype = 'int64')
 	for i,s in enumerate(S):
 		for j,tok in enumerate(s):
 			idx = word_idx[tok]
@@ -55,7 +57,8 @@ def process_target(fname, word_idx, tokenize = False, max_len = -1, use_hierarch
 			else:
 				Y[i, j, idx ] = 1
 			if j+1 < len(s): ###
-				Yshifted[i, j+1, idx ] = 1
+#				Yshifted[i, j+1, idx ] = 1
+				Yshifted[i, j+1] = idx
 
 	if use_hierarchical:
 		Y = Y_1,Y_2,Y_3,Y_4
@@ -159,10 +162,6 @@ def prepare_train(path_prefix = '../data/', train_source = 'train.en', train_tar
 
 def prepare_test(word_idx_en, word_idx_de, path_prefix = '../data/', test_source = 'val.en', test_target = 'val.de', test_img = 'VAL.vgg19.fc7.pkl', repeat = False, suffix = '.all.tokenized.unkified'):
 
-	if suffix == '.debug':
-		test_source = 'train.en'
-		test_target = 'train.de'
-
 	test_s = open_file(path_prefix + test_source + suffix)
 	test_t = open_file(path_prefix + test_target + suffix)
 
@@ -171,6 +170,9 @@ def prepare_test(word_idx_en, word_idx_de, path_prefix = '../data/', test_source
 
 	X_test, length_test = process_source(path_prefix + test_source + suffix, word_idx_en, max_len = max_len_en)
 	X_test_img = process_image(path_prefix + test_img, repeat = repeat)
+	if suffix == '.debug':
+		X_test_img = X_test_img[:X_test.shape[0]]
+
 	[Y_test, Y_test_shifted] = process_target(path_prefix + test_target + suffix, word_idx_de, max_len = max_len_de, use_hierarchical = True)
 
 	return X_test, test_t, X_test_img ,[Y_test, Y_test_shifted]
