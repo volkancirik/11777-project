@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import sys, gzip, theano, nltk
+import sys, gzip, nltk
 import numpy as np
 import cPickle as pickle
 from keras.preprocessing.sequence import pad_sequences
@@ -80,15 +80,26 @@ def process_source(fname, word_idx_en, max_len = -1):
 		length += [len(s)]
 	return X, length
 
-def process_image(fname, repeat = False):
-	f = open_file(fname)
-	package = pickle.load(f)
-	if len(package['features'].shape) == 4:
-		feats =  package['features'].reshape(package['features'].shape[0],package['features'].shape[1],-1)
+def process_image(fname, cnn_filter_file, repeat = False, mode = 0):
+	if mode <= 1:
+		f = open_file(fname)
+		package = pickle.load(f)
+		if len(package['features'].shape) == 4:
+			feats_cnn =  package['features'].reshape(package['features'].shape[0],package['features'].shape[1],-1)
+		else:
+			feats_cnn =  package['features']
+	if mode >= 1:
+		f = open_file(cnn_filter_file)
+		package = pickle.load(f)
+		feats_filter = np.concatenate((package['o1'],package['o2'],package['o3'],package['o4']), axis = 1)
+	if mode == 1:
+		feats = np.concatenate((feats_cnn,feats_filter), axis = 1)
+	elif mode == 0:
+		feats = feats_cnn
+	elif mode == 2:
+		feats = feats_filter
 	else:
-		feats =  package['features']
-	if repeat:
-		return np.repeat(feats,5,axis = 0)
+		raise NotImplementedError()
 	return feats
 
 def get_max_len(f_list):
@@ -120,7 +131,7 @@ def get_dicts(f_list):
 
 	return word_idx, idx_word
 
-def prepare_train(path_prefix = '../data/', train_source = 'train.en', train_target = 'train.de', val_source = 'val.en', val_target = 'val.de', TRESHOLD = 1, train_img = 'TRAIN.vgg19.fc7.pkl', val_img = 'VAL.vgg19.fc7.pkl', use_hierarchical = True, repeat = False, suffix = '.all.tokenized.unkified', model_type = 0):
+def prepare_train(path_prefix = '../data/', train_source = 'train.en', train_target = 'train.de', val_source = 'val.en', val_target = 'val.de', TRESHOLD = 1, train_img = 'TRAIN.vgg19.fc7.pkl', val_img = 'VAL.vgg19.fc7.pkl', use_hierarchical = True, repeat = False, suffix = '.all.tokenized.unkified', model_type = 0, mode = 0, cnn_filter_val = '../cnn_filter/exp/BASELINE0/H256_L2_DR0.0_Arelu.feats.val.pkl', cnn_filter_train = '../cnn_filter/exp/BASELINE0/H256_L2_DR0.0_Arelu.feats.train.pkl'):
 	if model_type == 2:
 		train_img = 'TRAIN.vgg19.conv5_4.pkl'
 		val_img = 'VAL.vgg19.conv5_4.pkl'
@@ -146,11 +157,11 @@ def prepare_train(path_prefix = '../data/', train_source = 'train.en', train_tar
 
 	X_tr, length_tr = process_source(path_prefix + train_source  + suffix, word_idx_en, max_len = max_len_en)
 	[Y_tr, Y_tr_shifted] = process_target(path_prefix + train_target + suffix, word_idx_de, max_len = max_len_de, use_hierarchical = use_hierarchical)
-	X_tr_img = process_image(path_prefix + train_img, repeat = repeat)
+	X_tr_img = process_image(path_prefix + train_img, cnn_filter_train, repeat = repeat, mode = cnn_filter_mode)
 
 	X_val, length_val = process_source(path_prefix + val_source + suffix, word_idx_en,  max_len = max_len_en)
 	[Y_val,Y_val_shifted] = process_target(path_prefix + val_target + suffix, word_idx_de, max_len = max_len_de, use_hierarchical = use_hierarchical)
-	X_val_img = process_image(path_prefix + val_img, repeat = repeat)
+	X_val_img = process_image(path_prefix + val_img, cnn_filter_val, repeat = repeat, mode = cnn_filter_mode)
 
 	dicts = {'word_idx_en' :  word_idx_en, 'idx_word_en' : idx_word_en, 'word_idx_de' :  word_idx_de, 'idx_word_de' : idx_word_de}
 
@@ -176,3 +187,10 @@ def prepare_test(word_idx_en, word_idx_de, path_prefix = '../data/', test_source
 	[Y_test, Y_test_shifted] = process_target(path_prefix + test_target + suffix, word_idx_de, max_len = max_len_de, use_hierarchical = True)
 
 	return X_test, test_t, X_test_img ,[Y_test, Y_test_shifted]
+if __name__ == '__main__':
+	cnn_filter_val = '../cnn_filter/exp/BASELINE0/H256_L2_DR0.0_Arelu.feats.val.pkl'
+	val_img = '../data/VAL.vgg19.fc7.pkl'
+	for mode in range(3):
+		feats = process_image(val_img, cnn_filter_val, mode = mode)
+		print feats.shape
+
