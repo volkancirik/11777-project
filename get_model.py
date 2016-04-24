@@ -59,10 +59,10 @@ def model_0(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT):
 
 	prev_layer = 'embedding'
 	for layer in xrange(LAYERS -1):
-		model.add_node(RNN(HIDDEN_SIZE, output_dim = HIDDEN_SIZE, return_sequences = True), name = 'rnn'+str(layer), input = prev_layer)
+		model.add_node(RNN(HIDDEN_SIZE, output_dim = HIDDEN_SIZE, dropout = DROPOUT, return_sequences = True), name = 'rnn'+str(layer), input = prev_layer)
 		prev_layer = 'rnn'+str(layer)
 
-	model.add_node(RNN(HIDDEN_SIZE, output_dim = HIDDEN_SIZE, return_sequences = False), name='rnn'+str(LAYERS), input = prev_layer)
+	model.add_node(RNN(HIDDEN_SIZE, output_dim = HIDDEN_SIZE, dropout = DROPOUT, return_sequences = False), name='rnn'+str(LAYERS), input = prev_layer)
 
 	model.add_node(Dense(HIDDEN_SIZE, activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'merged', inputs = ['rnn'+str(LAYERS), 'context_img'], merge_mode = 'concat')
 	model.add_node(Dropout(DROPOUT), name = 'merged_d' , input = 'merged')
@@ -88,7 +88,7 @@ def model_1(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT):
 
 	prev_layer = 'embedding'
 	for layer in xrange(LAYERS-1):
-		model.add_node(RNN(HIDDEN_SIZE, output_dim = HIDDEN_SIZE, return_sequences = True), name = 'rnn'+str(layer), input = prev_layer)
+		model.add_node(RNN(HIDDEN_SIZE, output_dim = HIDDEN_SIZE, dropout = DROPOUT, return_sequences = True), name = 'rnn'+str(layer), input = prev_layer)
 		prev_layer = 'rnn'+str(layer)
 
 	return model, prev_layer
