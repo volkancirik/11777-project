@@ -28,7 +28,11 @@ def get_parser_nmt():
 
 	parser.add_argument('--filter-mode', action='store', dest='filter_mode',help='filter mode = 0',type=int,default = 0)
 
+	parser.add_argument('--dropmodality', action='store_true', dest='dropmodality',help='use dropmodality, default : false')
+
 	parser.set_defaults(hierarchical = True)
+
+	parser.set_defaults(dropmodality = False)
 
 	return parser
 

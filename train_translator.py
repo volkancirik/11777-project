@@ -26,6 +26,7 @@ PATIENCE = p.patience
 HIDDEN_SIZE = p.n_hidden
 LAYERS = p.layers
 DROPOUT = p.dropout
+DROPMODALITY = p.dropmodality
 BATCH_SIZE = p.batch_size
 SOURCE = p.source + p.suffix
 FILTER_MODE = p.filter_mode
@@ -33,12 +34,10 @@ PREFIX = 'exp/'+p.prefix + '/'
 SUFFIX = p.suffix
 REPEAT= {'full' : True, 'truncated' : False, 'debug' : False, 'task1' : False}[SUFFIX]
 os.system('mkdir -p '+PREFIX)
-FOOTPRINT = 'M' + str(MODEL) + '_U' + p.unit + '_H' + str(HIDDEN_SIZE) + '_L' + str(LAYERS) + '_HIER' + str(HIERARCHICAL) + '_SUF' + SUFFIX + '_DR' + str(DROPOUT) + '_FMODE' + str(FILTER_MODE)
+FOOTPRINT = 'M' + str(MODEL) + '_U' + p.unit + '_H' + str(HIDDEN_SIZE) + '_L' + str(LAYERS) + '_HIER' + str(HIERARCHICAL) + '_SUF' + SUFFIX + '_DR' + str(DROPOUT) + '_FMODE' + str(FILTER_MODE) + '_DM' + str(DROPMODALITY)
 
 ### get data
 X_tr, [Y_tr, Y_tr_shifted] , X_tr_img, X_val, [Y_val,Y_val_shifted], X_val_img, dicts , [length_tr, length_val] = prepare_train(use_hierarchical = HIERARCHICAL, suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug', 'task1' : '.task1'}[SUFFIX], repeat = REPEAT, model_type = MODEL, mode = FILTER_MODE)
-
-print("-->",X_tr_img.shape)
 
 MAXLEN = Y_tr_shifted.shape[1]
 V_en = len(dicts['word_idx_en'])
@@ -53,7 +52,7 @@ print("maxlen & img_size & v_en & v_de",MAXLEN,IMG_SIZE,V_en,V_de)
 
 b_X_tr, b_Y_tr = distribute_buckets(length_tr, [X_tr,X_tr_img], list(Y_tr) +[Y_tr_shifted], step_size = 5, x_set = set([0]), y_set = set())
 
-model = get_model(MODEL, p.unit, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, use_hierarchical = HIERARCHICAL)
+model = get_model(MODEL, p.unit, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, use_hierarchical = HIERARCHICAL, dropmodality = DROPMODALITY)
 pat = 0
 
 train_history = {'loss' : [], 'val_meteor' : []}

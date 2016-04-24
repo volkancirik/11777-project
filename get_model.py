@@ -11,7 +11,6 @@ from keras.regularizers import l1l2, l2
 from keras.layers import dropoutrnn
 from keras.layers.dropmodality import DropModality
 
-#UNIT = {'rnn' : recurrent.SimpleRNN, 'gru' : recurrent.GRU, 'lstm' : recurrent.LSTM}
 UNIT = { 'gru' : dropoutrnn.DropoutGRU, 'lstm' : dropoutrnn.DropoutLSTM}
 CLIP = 10
 
@@ -39,7 +38,7 @@ def dan(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DROPMOD
 		prev_layer = 'avg_en'+str(layer+1)+'_d'
 
 	if DROPMODALITY:
-		model.add_node(DropModality([HIDDEN_SIZE,HIDDEN_SIZE]), name = 'dm', inputs = [prev_laye,'context_img'], merge_mode = 'concat', concat_axis = -1)
+		model.add_node(DropModality([HIDDEN_SIZE,HIDDEN_SIZE]), name = 'dm', inputs = [prev_layer,'context_img'], merge_mode = 'concat', concat_axis = 1)
 		model.add_node(Dense(HIDDEN_SIZE,activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'merged', input = 'dm')
 	else:
 		model.add_node(Dense(HIDDEN_SIZE,activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'merged', inputs = [prev_layer, 'context_img'], merge_mode = 'concat',  concat_axis = -1)
@@ -69,7 +68,11 @@ def model_0(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DRO
 
 	model.add_node(RNN(HIDDEN_SIZE, output_dim = HIDDEN_SIZE, dropout = DROPOUT, return_sequences = False), name='rnn'+str(LAYERS), input = prev_layer)
 
-	model.add_node(Dense(HIDDEN_SIZE, activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'merged', inputs = ['rnn'+str(LAYERS), 'context_img'], merge_mode = 'concat')
+	if DROPMODALITY:
+		model.add_node(DropModality([HIDDEN_SIZE,HIDDEN_SIZE]), name = 'dm', inputs = ['rnn'+str(LAYERS),'context_img'], merge_mode = 'concat', concat_axis = 1)
+		model.add_node(Dense(HIDDEN_SIZE,activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'merged', input = 'dm')
+	else:
+		model.add_node(Dense(HIDDEN_SIZE, activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'merged', inputs = ['rnn'+str(LAYERS), 'context_img'], merge_mode = 'concat')
 	model.add_node(Dropout(DROPOUT), name = 'merged_d' , input = 'merged')
 	prev_layer = 'merged_d'
 
@@ -98,12 +101,12 @@ def model_1(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DRO
 
 	return model, prev_layer
 
-def get_model(model_id, unit, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DROPMODALITY = False, use_hierarchical = False):
+def get_model(model_id, unit, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, dropmodality = False, use_hierarchical = False):
 	print('building model...')
 	RNN = UNIT[unit]
 	models = { 1 : model_1, 0 : model_0, -1 : dan}
-	print("-->",model_id,RNN,IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DROPMODALITY)
-	model,prev_layer =  models[model_id](RNN,IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DROPMODALITY = DROPMODALITY)
+
+	model,prev_layer =  models[model_id](RNN,IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DROPMODALITY = dropmodality)
 	DIM = int(pow(V_de,0.25))
 
 	if model_id == 1:
