@@ -9,12 +9,13 @@ from keras.layers.decoder import LSTMhdecoder, SplitDecoder, LSTMAttentionDecode
 from keras.regularizers import l1l2, l2
 
 from keras.layers import dropoutrnn
+from keras.layers.dropmodality import DropModality
 
 #UNIT = {'rnn' : recurrent.SimpleRNN, 'gru' : recurrent.GRU, 'lstm' : recurrent.LSTM}
 UNIT = { 'gru' : dropoutrnn.DropoutGRU, 'lstm' : dropoutrnn.DropoutLSTM}
 CLIP = 10
 
-def dan(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT):
+def dan(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DROPMODALITY = False):
 	'''
 	DAN with fc of a CNN
 	'''
@@ -37,13 +38,17 @@ def dan(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT):
 		model.add_node(Dropout(DROPOUT), name = 'avg_en'+str(layer+1)+'_d' , input = 'avg_en'+str(layer+1))
 		prev_layer = 'avg_en'+str(layer+1)+'_d'
 
-	model.add_node(Dense(HIDDEN_SIZE,activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'merged', inputs = [prev_layer, 'context_img'], merge_mode = 'concat',  concat_axis = -1)
+	if DROPMODALITY:
+		model.add_node(DropModality([HIDDEN_SIZE,HIDDEN_SIZE]), name = 'dm', inputs = [prev_laye,'context_img'], merge_mode = 'concat', concat_axis = -1)
+		model.add_node(Dense(HIDDEN_SIZE,activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'merged', input = 'dm')
+	else:
+		model.add_node(Dense(HIDDEN_SIZE,activation = 'relu', W_regularizer = l1l2(l1 = 0.00001, l2 = 0.00001)), name = 'merged', inputs = [prev_layer, 'context_img'], merge_mode = 'concat',  concat_axis = -1)
 	model.add_node(Dropout(DROPOUT), name = 'merged_d' , input = 'merged')
 
 	return model, 'merged_d'
 
 
-def model_0(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT):
+def model_0(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DROPMODALITY = False):
 	'''
 	Enc-dec with fc of a CNN
 	'''
@@ -71,7 +76,7 @@ def model_0(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT):
 	return model, prev_layer
 
 
-def model_1(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT):
+def model_1(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DROPMODALITY = False):
 	'''
 	Attention for english and using fc of a CNN
 	'''
@@ -93,11 +98,12 @@ def model_1(RNN, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT):
 
 	return model, prev_layer
 
-def get_model(model_id, unit, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, use_hierarchical = False):
+def get_model(model_id, unit, IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DROPMODALITY = False, use_hierarchical = False):
 	print('building model...')
 	RNN = UNIT[unit]
 	models = { 1 : model_1, 0 : model_0, -1 : dan}
-	model,prev_layer =  models[model_id](RNN,IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT)
+	print("-->",model_id,RNN,IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DROPMODALITY)
+	model,prev_layer =  models[model_id](RNN,IMG_SIZE, MAXLEN, V_en, V_de, HIDDEN_SIZE, LAYERS, DROPOUT, DROPMODALITY = DROPMODALITY)
 	DIM = int(pow(V_de,0.25))
 
 	if model_id == 1:
