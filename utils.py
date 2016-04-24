@@ -26,6 +26,8 @@ def get_parser_nmt():
 
 	parser.add_argument('--suffix', action='store', dest='suffix',help='full|task1|debug data, default = task1',default = 'task1')
 
+	parser.add_argument('--filter-mode', action='store', dest='filter_mode',help='filter mode = 0',type=int,default = 0)
+
 	parser.set_defaults(hierarchical = True)
 
 	return parser

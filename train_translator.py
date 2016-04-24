@@ -28,14 +28,17 @@ LAYERS = p.layers
 DROPOUT = p.dropout
 BATCH_SIZE = p.batch_size
 SOURCE = p.source + p.suffix
+FILTER_MODE = p.filter_mode
 PREFIX = 'exp/'+p.prefix + '/'
 SUFFIX = p.suffix
 REPEAT= {'full' : True, 'truncated' : False, 'debug' : False, 'task1' : False}[SUFFIX]
 os.system('mkdir -p '+PREFIX)
-FOOTPRINT = 'M' + str(MODEL) + '_U' + p.unit + '_H' + str(HIDDEN_SIZE) + '_L' + str(LAYERS) + '_HIER' + str(HIERARCHICAL) + '_SUF' + SUFFIX + '_DR' + str(DROPOUT)
+FOOTPRINT = 'M' + str(MODEL) + '_U' + p.unit + '_H' + str(HIDDEN_SIZE) + '_L' + str(LAYERS) + '_HIER' + str(HIERARCHICAL) + '_SUF' + SUFFIX + '_DR' + str(DROPOUT) + '_FMODE' + str(FILTER_MODE)
 
 ### get data
-X_tr, [Y_tr, Y_tr_shifted] , X_tr_img, X_val, [Y_val,Y_val_shifted], X_val_img, dicts , [length_tr, length_val] = prepare_train(use_hierarchical = HIERARCHICAL, suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug', 'task1' : '.task1'}[SUFFIX], repeat = REPEAT, model_type = MODEL)
+X_tr, [Y_tr, Y_tr_shifted] , X_tr_img, X_val, [Y_val,Y_val_shifted], X_val_img, dicts , [length_tr, length_val] = prepare_train(use_hierarchical = HIERARCHICAL, suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug', 'task1' : '.task1'}[SUFFIX], repeat = REPEAT, model_type = MODEL, mode = FILTER_MODE)
+
+print("-->",X_tr_img.shape)
 
 MAXLEN = Y_tr_shifted.shape[1]
 V_en = len(dicts['word_idx_en'])
