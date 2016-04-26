@@ -157,11 +157,17 @@ def prepare_train(path_prefix = '../data/', train_source = 'train.en', train_tar
 
 	X_tr, length_tr = process_source(path_prefix + train_source  + suffix, word_idx_en, max_len = max_len_en)
 	[Y_tr, Y_tr_shifted] = process_target(path_prefix + train_target + suffix, word_idx_de, max_len = max_len_de, use_hierarchical = use_hierarchical)
-	X_tr_img = process_image(path_prefix + train_img, cnn_filter_train, repeat = repeat, mode = mode)
+	if model_type != 3:
+		X_tr_img = process_image(path_prefix + train_img, cnn_filter_train, repeat = repeat, mode = mode)
+	else:
+		X_tr_img = []
 
 	X_val, length_val = process_source(path_prefix + val_source + suffix, word_idx_en,  max_len = max_len_en)
 	[Y_val,Y_val_shifted] = process_target(path_prefix + val_target + suffix, word_idx_de, max_len = max_len_de, use_hierarchical = use_hierarchical)
-	X_val_img = process_image(path_prefix + val_img, cnn_filter_val, repeat = repeat, mode = mode)
+	if model_type != 3:
+		X_val_img = process_image(path_prefix + val_img, cnn_filter_val, repeat = repeat, mode = mode)
+	else:
+		X_val_img = []
 
 	dicts = {'word_idx_en' :  word_idx_en, 'idx_word_en' : idx_word_en, 'word_idx_de' :  word_idx_de, 'idx_word_de' : idx_word_de}
 
