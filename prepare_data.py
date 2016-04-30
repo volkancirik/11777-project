@@ -177,7 +177,7 @@ def prepare_train(path_prefix = '../data/', train_source = 'train.en', train_tar
 
 	return X_tr, [Y_tr, Y_tr_shifted] , X_tr_img, X_val, [Y_val,Y_val_shifted], X_val_img, dicts , [length_tr, length_val]
 
-def prepare_test(word_idx_en, word_idx_de, path_prefix = '../data/', test_source = 'val.en', test_target = 'val.de', test_img = 'VAL.vgg19.fc7.pkl', repeat = False, suffix = '.all.tokenized.unkified'):
+def prepare_test(word_idx_en, word_idx_de, path_prefix = '../data/', test_source = 'val.en', test_target = 'val.de', test_img = 'VAL.vgg19.fc7.pkl', repeat = False, suffix = '.all.tokenized.unkified', cnn_filter_file = '../cnn_filter/exp/BASELINE0/H256_L2_DR0.0_Arelu.feats.val.pkl', mode = 0):
 
 	test_s = open_file(path_prefix + test_source + suffix)
 	test_t = open_file(path_prefix + test_target + suffix)
@@ -186,7 +186,7 @@ def prepare_test(word_idx_en, word_idx_de, path_prefix = '../data/', test_source
 	max_len_de = get_max_len([test_t])
 
 	X_test, length_test = process_source(path_prefix + test_source + suffix, word_idx_en, max_len = max_len_en)
-	X_test_img = process_image(path_prefix + test_img, repeat = repeat)
+	X_test_img = process_image(path_prefix + test_img, cnn_filter_file, mode = mode)
 	if suffix == '.debug':
 		X_test_img = X_test_img[:X_test.shape[0]]
 

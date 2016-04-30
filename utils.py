@@ -22,6 +22,7 @@ def get_parser_nmt():
 	parser.add_argument('--prefix', action='store', dest='prefix',help='exp log prefix to append exp/{} default = 0',default = '0')
 
 	parser.add_argument('--source', action='store', dest='source',help='source file for validation default = ../data/val.de.task1',default = '../data/val.de.')
+
 	parser.add_argument('--use-hierarchical', action='store_true', dest='hierarchical',help='use hierarchical softmax, default : true')
 
 	parser.add_argument('--suffix', action='store', dest='suffix',help='full|task1|debug data, default = task1',default = 'task1')
@@ -44,6 +45,8 @@ def get_parser_nmt_test():
 	parser.add_argument('--samples', action='store', dest='samples',help='# of samples 0 : for all, default 0', type = int, default = 0)
 	parser.add_argument('--mtype', action='store', dest='m_type',help='model type {text|text+image|image} ',default = '')
 	parser.add_argument('--func', action='store', dest='func',help='function type {test|error|eval} ',default = 'eval')
+	parser.add_argument('--filter-mode', action='store', dest='filter_mode',help='filter mode = 0',type=int,default = 0)
+	parser.add_argument('--cnn-filter-file', action='store', dest='cnn_filter_file',help='cnn filter file default = ""',default = '')
 
 	return parser
 

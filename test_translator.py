@@ -153,7 +153,7 @@ REPEAT= {'full' : True, 'truncated' : False, 'debug' : False, 'task1' : False}[S
 BATCH_SIZE = 64
 
 model, dicts, HIERARCHICAL = load_model(PATH)
-X_test, _ , X_test_img, [Y_test, Y_test_shifted] = prepare_test(dicts['word_idx_en'],dicts['word_idx_de'],repeat = REPEAT, suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug', 'task1' : '.task1'}[SUFFIX])
+X_test, _ , X_test_img, [Y_test, Y_test_shifted] = prepare_test(dicts['word_idx_en'],dicts['word_idx_de'],repeat = REPEAT, suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug', 'task1' : '.task1'}[SUFFIX], mode = p.filter_mode, cnn_filter_file  = p.cnn_filter_file)
 gold,source = get_sentences(suffix = {'full' : '.all.tokenized.unkified', 'truncated' : '.truncated', 'debug' : '.debug', 'task1' : '.task1'}[SUFFIX])
 
 SAMPLES = len(X_test) if p.samples <= 0 else p.samples
